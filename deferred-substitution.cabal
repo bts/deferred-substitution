@@ -1,0 +1,51 @@
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 33a60ac224706f2050c25e3a67eb1e32172cb8df35674c993e03d3910c896432
+
+name:           deferred-substitution
+version:        0.1.0.0
+synopsis:       An implementation of deferred substitution
+description:    An implementation of Lambda-DSIM from Ben Lippmeier's functional pearl "Don't Substitute Into Abstractions"
+category:       Compiler
+homepage:       https://github.com/bts/deferred-substitution#readme
+bug-reports:    https://github.com/bts/deferred-substitution/issues
+author:         Brian Schroeder
+maintainer:     bts@gmail.com
+copyright:      2018 Brian Schroeder
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/bts/deferred-substitution
+
+library
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <5
+  exposed-modules:
+      DeferredSubstitution
+  other-modules:
+      Paths_deferred_substitution
+  default-language: Haskell2010
+
+test-suite deferred-substitution-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , deferred-substitution
+  other-modules:
+      Paths_deferred_substitution
+  default-language: Haskell2010

@@ -1,0 +1,33 @@
+name:                deferred-substitution
+version:             0.1.0.0
+github:              "bts/deferred-substitution"
+license:             BSD3
+author:              "Brian Schroeder"
+maintainer:          "bts@gmail.com"
+copyright:           "2018 Brian Schroeder"
+
+extra-source-files:
+- README.md
+
+synopsis:            An implementation of deferred substitution
+category:            Compiler
+description:         >
+  An implementation of Lambda-DSIM from Ben Lippmeier's functional pearl "Don't
+  Substitute Into Abstractions"
+
+dependencies:
+- base >= 4.7 && < 5
+
+library:
+  source-dirs: src
+
+tests:
+  deferred-substitution-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - deferred-substitution
