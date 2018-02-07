@@ -16,7 +16,9 @@ description:         >
   Substitute Into Abstractions"
 
 dependencies:
-- base >= 4.7 && < 5
+- base >= 4.7 && < 5.0
+- containers
+- text >= 1.2 && < 1.3
 
 library:
   source-dirs: src
