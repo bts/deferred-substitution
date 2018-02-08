@@ -2,11 +2,15 @@
 -- Substitute Into Abstractions (Functional Pearl)"
 module DeferredSubstitution where
 
-import Data.Sequence ((><), Seq(..))
+import Data.Map (Map)
+import Data.Maybe (fromMaybe)
+import Data.Monoid ((<>))
 import Data.Text (Text)
 
+import qualified Data.Map.Strict as Map
+
 newtype Name = Name Text
-  deriving Eq
+  deriving (Eq, Ord)
 
 data Type
   = TyUnit
@@ -19,35 +23,29 @@ data Term
 
 -- | A "right-biased simultaneous priority substitution"
 --
--- We use @Seq@ here so we can efficiently sonc, search from the right, and
--- concatenate. Unlike @[]@ (fast view) or @DList@ (fast build), it gives us
--- both fast build and view. And we don't have to think in terms of reversed
--- lists.
-newtype Sub = Sub (Seq (Name, Term))
+-- We use a @Map@ here because we don't require the simplified semantics of the
+-- paper -- we never pop our "stack", so we can overwrite earlier names in the
+-- substitution.
+--
+-- We're right-biased in that @Map@ 'insert' overwrites, and our 'mappend' is
+-- right-biased.
+newtype Sub = Sub { _subMap :: Map Name Term }
 
--- @lookup_S@ in the paper
+instance Monoid Sub where
+  mempty = Sub mempty
+  mappend (Sub mapL) (Sub mapR) = Sub $ Map.union mapR mapL -- NOTE: right bias
+
 lookupSub :: Name -> Sub -> Maybe Term
-lookupSub name (Sub seq') = go seq'
-  where
-    go :: Seq (Name, Term) -> Maybe Term
-    go Empty = Nothing
-    go (rest :|> (name', term))
-      | name' == name = Just term
-      | otherwise     = go rest
+lookupSub name (Sub terms) = Map.lookup name terms
 
 -- @subst@ in the paper
 -- | The application of an explicit substitution, theta, to a term.
 substitute :: Sub -> Term -> Term
-substitute theta var@(Var name) =
-  case lookupSub name theta of
-    Just e -> e
-    Nothing -> var
-substitute thetaL@(Sub seqL) (Abs (Sub seqR) var ty body) =
-    Abs theta var ty body
+substitute theta var@(Var name) = fromMaybe var $ lookupSub name theta
+substitute outer (Abs inner var ty body) = Abs theta var ty body
   where
-    theta = Sub $ seqL >< fmap (fmap (substitute thetaL)) seqR
-substitute theta (App t0 t1) =
-  App (substitute theta t0) (substitute theta t1)
+    theta = outer <> Sub (substitute outer <$> _subMap inner)
+substitute theta (App t0 t1) = App (substitute theta t0) (substitute theta t1)
 
 -- @lookup_E@ in the paper
---lookupEnv ::
+--lookupEnv :: Name -> Env -> Maybe Type
