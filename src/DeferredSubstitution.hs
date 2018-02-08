@@ -1,3 +1,5 @@
+{-# language DeriveFunctor #-}
+
 -- | An implementation of the formal system in Ben Lippmeier's "Don't
 -- Substitute Into Abstractions (Functional Pearl)"
 module DeferredSubstitution where
@@ -21,22 +23,29 @@ data Term
   | Abs Sub Name Type Term
   | App Term Term
 
+newtype VarMap a = VarMap (Map Name a)
+  deriving Functor
+
+instance Monoid (VarMap a) where
+  mempty = VarMap mempty
+  mappend (VarMap l) (VarMap r) = VarMap $ Map.union r l -- NOTE: right bias
+
 -- | A "right-biased simultaneous priority substitution"
 --
 -- We use a @Map@ here because we don't require the simplified semantics of the
 -- paper -- we never pop our "stack", so we can overwrite earlier names in the
 -- substitution.
 --
--- We're right-biased in that @Map@ 'insert' overwrites, and our 'mappend' is
--- right-biased.
-newtype Sub = Sub { _subMap :: Map Name Term }
+-- We're right-biased in that @VarMap@'s @Map@ 'insert' overwrites, and our
+-- 'mappend' is right-biased.
+type Sub = VarMap Term
 
-instance Monoid Sub where
-  mempty = Sub mempty
-  mappend (Sub mapL) (Sub mapR) = Sub $ Map.union mapR mapL -- NOTE: right bias
+lookup' :: Name -> VarMap a -> Maybe a
+lookup' name (VarMap m) = Map.lookup name m
 
+-- @lookup_S@ in the paper
 lookupSub :: Name -> Sub -> Maybe Term
-lookupSub name (Sub terms) = Map.lookup name terms
+lookupSub = lookup'
 
 -- @subst@ in the paper
 -- | The application of an explicit substitution, theta, to a term.
@@ -44,8 +53,11 @@ substitute :: Sub -> Term -> Term
 substitute theta var@(Var name) = fromMaybe var $ lookupSub name theta
 substitute outer (Abs inner var ty body) = Abs theta var ty body
   where
-    theta = outer <> Sub (substitute outer <$> _subMap inner)
+    theta = outer <> (substitute outer <$> inner)
 substitute theta (App t0 t1) = App (substitute theta t0) (substitute theta t1)
 
+type Env = VarMap Type
+
 -- @lookup_E@ in the paper
---lookupEnv :: Name -> Env -> Maybe Type
+lookupEnv :: Name -> Env -> Maybe Type
+lookupEnv = lookup'
