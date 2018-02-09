@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d2b79250632a908173aaac9c1ed9aab035a9ab044020e2e0438593a0d1bc4808
+-- hash: 92db0f58b247ae3fc299fe3c916f877f5dc187017aeb826878674cb0f51ad5b9
 
 name:           deferred-substitution
 version:        0.1.0.0
@@ -31,7 +31,8 @@ library
       src
   build-depends:
       base >=4.7 && <5.0
-    , containers
+    , containers >=0.5.10 && <0.6
+    , mtl >=2.2.1 && <2.3
     , text >=1.2 && <1.3
   exposed-modules:
       DeferredSubstitution
@@ -47,8 +48,9 @@ test-suite deferred-substitution-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5.0
-    , containers
+    , containers >=0.5.10 && <0.6
     , deferred-substitution
+    , mtl >=2.2.1 && <2.3
     , text >=1.2 && <1.3
   other-modules:
       Paths_deferred_substitution
