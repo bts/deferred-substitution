@@ -24,7 +24,8 @@ data Type
   deriving (Eq)
 
 data Term
-  = Var Name
+  = Unit
+  | Var Name
   | Abs Sub Name Type Term
   | App Term Term
 
@@ -57,6 +58,7 @@ lookupSub = lookup'
 -- @subst@ in the paper
 -- | The application of an explicit substitution, theta, to a term.
 substitute :: Sub -> Term -> Term
+substitute _theta Unit = Unit
 substitute theta var@(Var name) = fromMaybe var $ lookupSub name theta
 substitute outer (Abs inner var ty body) = Abs theta var ty body
   where
@@ -99,6 +101,7 @@ actual `shouldBe` expected = when (expected /= actual) $
   throwError $ TypeMismatch expected actual
 
 check :: Type -> Term -> CheckM ()
+check ty Unit = ty `shouldBe` TyUnit
 check ty (Var name) = do
   mTy' <- typeInEnv name
   case mTy' of
@@ -113,6 +116,7 @@ check ty (t0 `App` t1) = do
   check (TyArr argTy ty) t0
 
 infer :: Term -> CheckM Type
+infer Unit = return TyUnit
 infer (Var name) = do
   mTy <- typeInEnv name
   case mTy of
