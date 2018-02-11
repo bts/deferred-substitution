@@ -10,9 +10,11 @@ import Control.Monad.Reader (Reader, MonadReader(ask, local))
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
+import Data.String (IsString(..))
 import Data.Text (Text)
 
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as T
 
 newtype Name
   = Name Text
@@ -36,6 +38,9 @@ newtype VarMap a
 instance Monoid (VarMap a) where
   mempty = VarMap mempty
   mappend (VarMap l) (VarMap r) = VarMap $ Map.union r l -- NOTE: right bias
+
+mappedTo :: Name -> a -> VarMap a
+name `mappedTo` a = VarMap $ Map.singleton name a
 
 -- | A "right-biased simultaneous priority substitution"
 --
@@ -73,14 +78,13 @@ lookupEnv :: Name -> Env -> Maybe Type
 lookupEnv = lookup'
 
 data TypeError
-  = UnboundVariable Name
+  = NotInScope Name
   | TypeMismatch { _mismatchExpected :: Type
                  , _mismatchActual   :: Type }
-  | UnexpectedFunction { _ufFunction :: Term
-                       , _ufType     :: Type }
-  | ExpectedFunction { _efNonFunction :: Term
-                     , _efArgument    :: Term
-                     , _efArgType     :: Type }
+  | ExpectedFunctionType { _efNonFunction     :: Term
+                         , _efNonFunctionType :: Type
+                         , _efArg             :: Term
+                         , _efArgType         :: Type }
 
 newtype CheckM a
   = CheckM { runCheckM :: ExceptT TypeError (Reader Env) a }
@@ -91,10 +95,7 @@ typeInEnv name = lookupEnv name <$> ask
 
 -- extend/shadow the typing context with a new binding
 assuming :: Name -> Type -> CheckM a -> CheckM a
-assuming name ty = local (<> singletonEnv)
-  where
-    singletonEnv :: Env
-    singletonEnv = VarMap $ Map.singleton name ty
+assuming name ty = local (<> name `mappedTo` ty)
 
 shouldBe :: Type -> Type -> CheckM ()
 actual `shouldBe` expected = when (expected /= actual) $
@@ -106,11 +107,13 @@ check ty (Var name) = do
   mTy' <- typeInEnv name
   case mTy' of
     Just ty' -> ty' `shouldBe` ty
-    Nothing -> throwError $ UnboundVariable name
+    Nothing -> throwError $ NotInScope name
 check (TyArr inTy outTy) (Abs _theta name paramTy body) = do
   paramTy `shouldBe` inTy
   assuming name paramTy $ check outTy body
-check ty term@(Abs _ _ _ _) = throwError $ UnexpectedFunction term ty
+check ty term@(Abs _ _ _ _) = do
+  ty' <- infer term -- infer a type for our error message
+  ty' `shouldBe` ty -- always errors, because ty' is not TyArr
 check ty (t0 `App` t1) = do
   argTy <- infer t1
   check (TyArr argTy ty) t0
@@ -121,7 +124,7 @@ infer (Var name) = do
   mTy <- typeInEnv name
   case mTy of
     Just ty -> return ty
-    Nothing -> throwError $ UnboundVariable name
+    Nothing -> throwError $ NotInScope name
 infer (Abs _theta _name argTy body) = TyArr argTy <$> infer body
 infer (App t0 t1) = do
   argTy <- infer t1
@@ -130,4 +133,34 @@ infer (App t0 t1) = do
     TyArr inTy outTy -> do
       argTy `shouldBe` inTy -- inTy is primary here: it's annotated on the abs
       return outTy
-    _ -> throwError $ ExpectedFunction t0 t1 argTy
+    _ -> throwError $ ExpectedFunctionType t0 funTy t1 argTy
+
+isValue :: Term -> Bool
+isValue Unit = True
+isValue (Var _) = False
+isValue (Abs _ _ _ _) = True -- ValueAbs
+isValue (App _ _) = False
+
+-- whether a term is in weak head normal form
+isDone :: Term -> Bool
+isDone (Var _) = True                             -- DoneVar
+isDone (App t0 _) = isDone t0 && not (isValue t0) -- DoneApp
+isDone term = isValue term                        -- DoneValue
+
+data EvalError
+  = UnboundVariable Name
+  | ExpectedFunction Term Term
+
+eval :: Term -> Either EvalError Term
+eval Unit = return $ Unit
+eval (Var name) = throwError $ UnboundVariable name
+eval term@(Abs _ _ _ _) = return term
+eval (App t0 t1) =
+  if isValue t0
+  then if isDone t1
+       then case t0 of
+              Abs theta name _argTy body ->       -- EsReduce
+                eval $ substitute (theta <> (name `mappedTo` t1)) body
+              _ -> throwError $ ExpectedFunction t0 t1
+       else eval t1 >>= \t1' -> eval (App t0 t1') -- EsAppRight
+  else eval t0 >>= \t0' -> eval (App t0' t1)      -- EsAppLeft
